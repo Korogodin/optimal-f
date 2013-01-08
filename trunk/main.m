@@ -229,18 +229,3 @@ end
 %                 exp(0);
 
 
-%     pextr = nan(length(psi1), length(psi2));
-%     for j1 = 1:length(psi1)
-%         for j2 = 1:length(psi2)
-%             pextr(j1, j2) = 0;
-%             xk = [psi1(j1); psi2(j2)];
-%             for i1 = 1:length(psi1)
-%                 xkm1 = [psi1(i1); 0];
-%                 for i2 = 1:length(psi2)
-%                     xkm1(2) = psi2(i2);
-%                     pxx_norm = exp(-0.5*(xk-F*xkm1)'*Dxxm1*(xk-F*xkm1)); % * 1 / sqrt( (2*pi)^nx *detDxx)
-%                     pextr(j1, j2) = pextr(j1, j2) + pest(i1, i2)*pxx_norm*dpsi(1)*dpsi(2);
-%                 end
-%             end
-%         end
-%     end
