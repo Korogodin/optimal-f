@@ -259,7 +259,7 @@ for k = 1:K
     
     pest = exp(fixed_pest).*(pest > minpest); % *0, if  arg = argmax - dB_est
     
-    pesr = pextr;
+%     pesr = pextr;
     pest = pest/(sum(sum(pest))*dpsi(1)*dpsi(2));
  
     if pic_Est
