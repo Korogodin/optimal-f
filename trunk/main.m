@@ -52,7 +52,7 @@ lbase = 2; lambda0 = 0.19;
 
 % Initial PD of PhD
 % H_psi1 = 2 * lbase/lambda0 * 2*pi;
-H_psi1 = pi;
+H_psi1 = 2*pi;
 D_extr_psi1 = (H_psi1^2)/12;
 psi1s = (rand(1,1) - 0.5)*H_psi1; % psi_0
 
@@ -69,7 +69,7 @@ psi3s = (rand(1,1) - 0.5)*H_psi3; % (diff diff psi)_0
 Xs = [psi1s; psi2s];
 
 Npsi = [100; 120; 10]; % Number of points by axes
-maxpsi = 6*[2*sqrt(D_extr_psi1); 6*sqrt(D_extr_psi2); sqrt(D_extr_psi3)]; % Argument's area
+maxpsi = 6*[sqrt(D_extr_psi1); 6*sqrt(D_extr_psi2); sqrt(D_extr_psi3)]; % Argument's area
 minpsi = -maxpsi;
 dpsi = (maxpsi-minpsi) ./ Npsi; % differential step
 psi1 = minpsi(1):dpsi(1):maxpsi(1); % Argument's vectors
@@ -94,6 +94,8 @@ if pic_Init
     drawnow
     pause(0.1)
 end
+pause(3);
+% saveas(hF, sprintf('gif/%04.0f.png', 0), 'png')
 
 % Cycles
 tint = (0:(L-1))*Td;
@@ -258,12 +260,11 @@ for k = 1:K
     fixed_pest = fixed_pest - minpest;
     
     pest = exp(fixed_pest).*(pest > minpest); % *0, if  arg = argmax - dB_est
-    
-%     pesr = pextr;
+
     pest = pest/(sum(sum(pest))*dpsi(1)*dpsi(2));
  
     if pic_Est
-        figure(1)
+        hF = figure(1);
         subplot(2,2,4);
         surf(psi2/2/pi, psi1/2/pi, pest)
         title(['Aposteriori probability density and True value, ' sprintf('k = %.0f, t = %.3f s', k, k*T)]);
@@ -277,7 +278,7 @@ for k = 1:K
         drawnow
         pause(0.1)        
     end
-    
+%     saveas(hF, sprintf('gif/%04.0f.png', k), 'png')
 end
 
 
