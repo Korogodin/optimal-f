@@ -5,14 +5,16 @@ close all
 Fd = 44.2e6 * 1e-3; %MHz
 Td = 1/Fd;
 
-pic_Init = 0; 
-pic_Ext = 0;
+pic_Init = 1; 
+pic_Ext = 1;
+pic_Bess = 1;
 pic_Est = 1;
 
-stdn = 8e-3;
+stdn = 8e-2;
 dstdn2 = 2*stdn^2;
 invdstdn2 = 1/2*stdn^2;
 
+dBtoNp = 8.685889638; % = 1 Np / 1 dB
 T = 0.02;
 % F = [1 T 0;
 %        0 1 T;
@@ -22,18 +24,19 @@ F = [1 T;
 G = [0; 1];
 nx = 2;
 
-Sksi = 1e-3;
+% Sksi = 1e-3;
+Sksi = 1e-0;
 Dksi = Sksi/T;
 Dxx = Dksi; %G'*Dksi*G;
 detDxx = det(Dxx);
 Dxxm1 = Dxx^-1;
 Da = Dksi * (1/T) * (1/(2*pi*1.6e9)*3e8)^2; % D[a], (m/s^2)^2
 
-K = 400;
+K = 200;
 L = round(T/Td);
 M = 2;
 
-qcno_dB = 45;
+qcno_dB = 25;
 qcno = 10.^(qcno_dB/10);
 A = 2*stdn*sqrt(qcno*Td);
 invstdn2 = 1/stdn^2;
@@ -49,7 +52,7 @@ D_extr_psi1 = (H_psi1^2)/12;
 psi1s = (rand(1,1) - 0.5)*H_psi1; % psi_0
 
 % Initial PD of PhD rate
-H_psi2 = 2*pi*lbase/lambda0 / 20;
+H_psi2 = 2*pi*lbase/lambda0 / 3 ;
 D_extr_psi2 = (H_psi2^2)/12; 
 psi2s = (rand(1,1) - 0.5)*H_psi2; % (diff psi)_0
 
@@ -60,8 +63,8 @@ psi3s = (rand(1,1) - 0.5)*H_psi3; % (diff diff psi)_0
 
 Xs = [psi1s; psi2s];
 
-Npsi = [50; 40; 10]; % Number of points by axes
-maxpsi = 6*[sqrt(D_extr_psi1); 80*sqrt(D_extr_psi2); sqrt(D_extr_psi3)]; % Argument's area
+Npsi = [100; 80; 10]; % Number of points by axes
+maxpsi = 6*[2*sqrt(D_extr_psi1); 3*sqrt(D_extr_psi2); sqrt(D_extr_psi3)]; % Argument's area
 minpsi = -maxpsi;
 dpsi = (maxpsi-minpsi) ./ Npsi; % differential step
 psi1 = minpsi(1):dpsi(1):maxpsi(1); % Argument's vectors
@@ -76,21 +79,19 @@ pest = pest_psi1'*pest_psi2; % Common PD
 
 if pic_Init
     hF = figure(1);
+    subplot(2,2,1);
     surf(psi2/2/pi, psi1/2/pi, pest)
     title('Initial');
     ylabel('\psi, cycles');
     xlabel('\psi'', Hz');
-    % zlabel('p(x_k|Y_k)')
     zlabel('p(x_k)')
-    saveas(hF, sprintf('%04.0f.png', 0), 'png')
+%     saveas(hF, sprintf('%04.0f.png', 0), 'png')
     drawnow
     pause(0.1)
 end
 
 % Cycles
-max_arg_exp = 100; max_arg_exp_stdn = max_arg_exp*stdn^2;
-phi0_int = 0:(2*pi/10):2*pi; % \phi_1,0 axe for integration
-dphi = phi0_int(2) - phi0_int(1); % differential step of \phi_1_0
+tint = (0:(L-1))*Td;
 for k = 1:K
 
     pextr = zeros(length(psi1), length(psi2));
@@ -122,110 +123,150 @@ for k = 1:K
         end
     end
 
-    pextr = pextr * 1 / sqrt( (2*pi)^nx *detDxx) * dpsi(2); % multiplicators from cycle
+%     pextr = pextr * 1 / sqrt( (2*pi)^nx *detDxx) * dpsi(2); % multiplicators from cycle
+    pextr = pextr/(sum(sum(pextr))*dpsi(1)*dpsi(2));
     
     if pic_Ext
-        hF = figure(2);
+        hF = figure(1);
+        subplot(2,2,2);
         surf(psi2/2/pi, psi1/2/pi, pextr);
-        title(['Extrapolation, t = ' sprintf('%.3f s', k*T)])
-        %     title(['Progress of PD, t = ' sprintf('%.3f s', k*T)])
+        title(['Extrapolation, ' sprintf('k = %.0f, t = %.3f s', k, (k-1)*T)])
         ylabel('\psi, cycles');
         xlabel('\psi'', Hz');
-        zlabel('p(x_{k+1}|Y_k)')
-        %     zlabel('p(x_k)')
+        zlabel('p(x_{k}|Y_{k-1})')
         drawnow
         %     saveas(hF, sprintf('%04.0f.png', k), 'png')
         pause(0.1);
     end
 
-    Xs = 0*F*Xs + 0*G*randn(1,1)*sqrt(Dksi);
-    PW = 2*pi*Fd/3.3712*(0:(L-1))*Td; % Intermediate freq phase
+%     Xs = F*Xs + G*randn(1,1)*sqrt(Dksi);
+    cfreq = 0.3;
+    phi_Xs = 2*pi*cfreq*k*T + pi/2;
+    Xs(1) = psi1(end)/2*cos(phi_Xs);
+    Xs(2) = -psi1(end)/2*sin(phi_Xs)*2*pi*cfreq;
+
+    PW = 2*pi*Fd/3.3712*tint; % Intermediate freq phase
+    argSop1 = PW';
+    Sop1cos = cos(argSop1);
+    Sop1sin = sin(argSop1);
     
-    phi0 =  0*rand(1,1)*2*pi;
-    phi0_int = phi0;
-    S2 = A*cos(Xs(1) + Xs(2)*(0:(L-1))*Td +phi0 + PW);
+    phi0 =  rand(1,1)*2*pi;
+    S2 = A*cos(Xs(1) + Xs(2)*tint +phi0 + PW);
     S1 = A*cos(phi0 + PW);
-    y2 = S2 + 0*stdn*randn(1,L);
-    y1 = S1 + 0*stdn*randn(1,L);
+    y2 = S2 + 1*stdn*randn(1,L);
+    y1 = S1 + 1*stdn*randn(1,L);
 
-    j = 0;
     fprintf('Measurements are captured, my general, at t = %.3f s\n', k*T);
-    Likehood = ones(length(psi1), length(psi2));
-    lnLikehood = zeros(length(psi1), length(psi2));
-    for j2 = 1:length(psi2)
-        Spsi2base = exp(1i*(psi2(j2)*(0:(L-1))*Td + PW));
+    
+    calc_lnLike = 0;
+    if calc_lnLike
+        phi0_int = 0:(pi/4):pi;
         for ip  = 1:length(phi0_int)
-            Sphibase = Spsi2base*exp(1i*phi0_int(ip));
-            Sop1 = A*cos(phi0_int(ip) + PW);
-            for j1 = 1:length(psi1)
-                Sop2 =A*real(Sphibase*exp(1i*psi1(j1)));
-                Lstep = L;
-                l_ok = 0;
-                while l_ok < L
-                    
-                    step_nook = 1;
-                    while step_nook
-                        Lstep = min([Lstep, L-l_ok]); 
-                        argarr = (l_ok+1):(l_ok+Lstep);
-                        argexp =  (Sop1(argarr))*(y1(argarr))'+(Sop2(argarr))*(y2(argarr))' - 0.5*((Sop1(argarr))*(Sop1(argarr))' + (Sop2(argarr))*(Sop2(argarr))');
-                        if abs(argexp)<=max_arg_exp_stdn
-                            step_nook = 0;
-                        else
-                            if Lstep > 1
-                                Lstep = Lstep - 1;
-                            else
-                                fprintf('Bad dynamic range \n');
-                                step_nook = 0;
-                            end
-                        end
-                    end
-%                     Likehood(j1, j2) = Likehood(j1, j2) + exp( (  -0.5*(y1*y1'+y2*y2') + Sop1*y1'+Sop2*y2' - 0.5*(Sop1*Sop1' + Sop2*Sop2')  ) /  stdn^2  ); % / (2*pi*stdn^2) * dphi / (2*pi);
-                    expmult = exp( argexp * invstdn2 );
-                    j = j+1;
-                    eargexp_j(j) = argexp * invstdn2;
-                    expmult_j(j) = expmult;
-                    Likehood(j1, j2) = Likehood(j1, j2) * ( expmult ); 
-                    lnLikehood(j1, j2) = lnLikehood(j1, j2) + argexp * invstdn2;
-                    if expmult == 0
-                        fprintf('All is lost!\n');
-                    end
-                    
-                    l_ok = l_ok + Lstep;
-                    if 3*abs(argexp) < max_arg_exp_stdn
-                        Lstep = (fix(max_arg_exp_stdn/abs(argexp)) - 2) + Lstep;
-                    end
-
+            lnLikehood = zeros(length(psi1), length(psi2));
+            for j2 = 1:length(psi2)
+                Spsi2base = exp(1i*(PW + psi2(j2)*tint+ phi0_int(ip)));
+                Sop1 = A*cos(PW + phi0_int(ip));
+                for j1 = 1:length(psi1)
+                    Sop2 =A*real(Spsi2base*exp(1i*psi1(j1)));
+                    lnLikehood(j1, j2) = lnLikehood(j1, j2) +   Sop1*y1'+Sop2*y2' - 0.5*(Sop1*Sop1' + Sop2*Sop2')    ; % / (2*pi*stdn^2) * dphi / (2*pi);
                 end
             end
+            lnLikehood = lnLikehood * invstdn2  ;
+            
+            lnmode = 0;
+            figure(2)
+            if lnmode 
+                surf(psi2/2/pi, psi1/2/pi, dBtoNp*lnLikehood)
+                if phi0_int(ip) == 0
+                    title('ln L(x|\phi_1) for \phi_1 = 0');
+                else
+                    title(['ln L(x|\phi_1) for \phi_1 = \pi/' sprintf('%.0f', pi/phi0_int(ip)) ]);
+                end
+                zlabel('L(x|\mu), dB')
+            else
+                surf(psi2/2/pi, psi1/2/pi, exp(lnLikehood))
+                if phi0_int(ip) == 0
+                    title('L(x|\phi_1) for \phi_1 = 0');
+                else
+                    title(['L(x|\phi_1) for \phi_1 = \pi/' sprintf('%.0f', pi/phi0_int(ip)) ]);
+                end
+                zlabel('L(x|\mu)')
+            end
+            ylabel('\psi, cycles');
+            xlabel('\psi'', Hz');
+            drawnow
+            pause(0.1)
+%             saveas(hF, sprintf('%04.0f_%.0f.png', k, ip), 'png')
         end
+    end
     
-    if pic_Est
-        figure(3)
-        surf(psi2/2/pi, psi1/2/pi, lnLikehood)
-        title('Ln of Likehood function');
+    argBessel = zeros(length(psi1), length(psi2));
+    for j2 = 1:length(psi2)
+        for j1 = 1:length(psi1)
+            argSop2 = (PW + psi2(j2)*tint + psi1(j1))';
+            Sop2cos = cos(argSop2);
+            Sop2sin = sin(argSop2);
+
+            I2 = y2 * Sop2cos;
+            Q2 = y2 * Sop2sin;
+            I1 = y1 * Sop1cos;
+            Q1 = y1 * Sop1sin;
+            argBessel(j1, j2) = sqrt( (I1+I2).^2 + (Q1+Q2).^2 );
+        end
+    end
+    argBessel = A*argBessel*invstdn2;
+    L_in_Np = argBessel - 0.5*log(argBessel);    
+   
+    if pic_Bess
+        lnmode = 0;
+        figure(1)
+        subplot(2,2,3);
+        if lnmode
+%             L_in_Np = argBessel - 0.5*(log(argBessel) + log(2*pi))
+            surf(psi2/2/pi, psi1/2/pi, dBtoNp*L_in_Np) 
+            title('Mean Likehood L(x) in dB scale');            
+            zlabel('L(x), dB')
+        else
+            surf(psi2/2/pi, psi1/2/pi, besseli(0, argBessel))
+            title('Mean Likehood L(x)');
+            zlabel('L(x)')
+        end
+
         ylabel('\psi, cycles');
         xlabel('\psi'', Hz');
-        zlabel('ln p(y|x)')
         drawnow
         pause(0.1)
     end
-    return
-    pest = pextr;
+
+%     return
+
+    minpextr = max(max(pextr))*exp(-60);
+    fixed_pextr = (pextr > minpextr).*pextr  + (pextr <= minpextr)*minpextr;
+    pest = log(fixed_pextr) + L_in_Np;
+    
+    pest = exp(pest);
     pest = pest/(sum(sum(pest))*dpsi(1)*dpsi(2));
  
+    if pic_Est
+        figure(1)
+        subplot(2,2,4);
+        surf(psi2/2/pi, psi1/2/pi, pest)
+        title(['Aposteriori probability density, ' sprintf('k = %.0f, t = %.3f s', k, k*T)]);
+        zlabel('p(x_k|Y_k)')
+        ylabel('\psi, cycles');
+        xlabel('\psi'', Hz');
+        hold on
+        plot3(  [Xs(2)/2/pi, Xs(2)/2/pi], [Xs(1)/2/pi, Xs(1)/2/pi], [0, 1.2*max(max(pest))], 'r', ...
+                  Xs(2)/2/pi, Xs(1)/2/pi, 1.2*max(max(pest)), 'r*');
+        hold off        
+        drawnow
+        pause(0.1)        
+    end
+    
 end
 
 
 
-%             Phi = psi1(j1) + psi2(j2)*(0:(L-1))*Td;
-%             I2 = y2 * (cos(Phi))';
-%             Q2 = y2 * (sin(Phi))';
-%             
-%             I1 = y1 * ones(L,1);
-%             Q1 = y1 * zeros(L,1);
-%             X = sqrt( (I1+I2).^2 + (Q1+Q2).^2 );
-%             Likehood(j1, j2) = ...
-%             besseli(0, A/stdn^2*X)*... % Infinity
-%                 exp(0);
+
 
 
