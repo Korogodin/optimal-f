@@ -36,10 +36,15 @@ K = 200;
 L = round(T/Td);
 M = 2;
 
-qcno_dB = 25;
+qcno_dB = 20;
 qcno = 10.^(qcno_dB/10);
 A = 2*stdn*sqrt(qcno*Td);
 invstdn2 = 1/stdn^2;
+if qcno_dB > 30
+    lnmode = 1;
+else
+    lnmode = 0;
+end
 
 lbase = 2; lambda0 = 0.19;
 
@@ -63,8 +68,8 @@ psi3s = (rand(1,1) - 0.5)*H_psi3; % (diff diff psi)_0
 
 Xs = [psi1s; psi2s];
 
-Npsi = [100; 80; 10]; % Number of points by axes
-maxpsi = 6*[2*sqrt(D_extr_psi1); 3*sqrt(D_extr_psi2); sqrt(D_extr_psi3)]; % Argument's area
+Npsi = [100; 120; 10]; % Number of points by axes
+maxpsi = 6*[2*sqrt(D_extr_psi1); 6*sqrt(D_extr_psi2); sqrt(D_extr_psi3)]; % Argument's area
 minpsi = -maxpsi;
 dpsi = (maxpsi-minpsi) ./ Npsi; % differential step
 psi1 = minpsi(1):dpsi(1):maxpsi(1); % Argument's vectors
@@ -173,7 +178,7 @@ for k = 1:K
             end
             lnLikehood = lnLikehood * invstdn2  ;
             
-            lnmode = 0;
+%             lnmode = 0;
             figure(2)
             if lnmode 
                 surf(psi2/2/pi, psi1/2/pi, dBtoNp*lnLikehood)
@@ -218,7 +223,7 @@ for k = 1:K
     L_in_Np = argBessel - 0.5*log(argBessel);    
    
     if pic_Bess
-        lnmode = 0;
+%         lnmode = 0;
         figure(1)
         subplot(2,2,3);
         if lnmode
@@ -240,18 +245,28 @@ for k = 1:K
 
 %     return
 
-    minpextr = max(max(pextr))*exp(-60);
+    dB_extr = 120;
+    minpextr = max(max(pextr))*exp(-dB_extr);
     fixed_pextr = (pextr > minpextr).*pextr  + (pextr <= minpextr)*minpextr;
-    pest = log(fixed_pextr) + L_in_Np;
+    fixed_pextr = fixed_pextr / minpextr;
     
-    pest = exp(pest);
+    pest = log(fixed_pextr) + L_in_Np;
+
+    dB_est = 120;
+    minpest = max(max(pest))-dB_est;
+    fixed_pest = (pest > minpest).*pest  + (pest <= minpest)*minpest;
+    fixed_pest = fixed_pest - minpest;
+    
+    pest = exp(fixed_pest).*(pest > minpest); % *0, if  arg = argmax - dB_est
+    
+    pesr = pextr;
     pest = pest/(sum(sum(pest))*dpsi(1)*dpsi(2));
  
     if pic_Est
         figure(1)
         subplot(2,2,4);
         surf(psi2/2/pi, psi1/2/pi, pest)
-        title(['Aposteriori probability density, ' sprintf('k = %.0f, t = %.3f s', k, k*T)]);
+        title(['Aposteriori probability density and True value, ' sprintf('k = %.0f, t = %.3f s', k, k*T)]);
         zlabel('p(x_k|Y_k)')
         ylabel('\psi, cycles');
         xlabel('\psi'', Hz');
